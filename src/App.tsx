@@ -7,7 +7,6 @@ import { DiffViewer } from './components/DiffViewer';
 import { ResearchPanel } from './components/ResearchPanel';
 import { AssistantChat } from './components/AssistantChat';
 import { SettingsModal } from './components/SettingsModal';
-import { QuickGuide } from './components/QuickGuide';
 import { Toast, ToastMessage } from './components/Toast';
 
 import { SCENARIOS } from './samples/scenarios';
@@ -18,14 +17,13 @@ import { ShieldAlert, GitCompare, BookOpen, MessageSquareCode } from 'lucide-rea
 
 export const App: React.FC = () => {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('ts-cache-leak');
-  const [activePersonaId, setActivePersonaId] = useState<PersonaId>('staff-systems');
+  const [activePersonaId, setActivePersonaId] = useState<PersonaId>('security-auditor');
   const [code, setCode] = useState<string>(SCENARIOS[0].code);
   const [language, setLanguage] = useState<string>(SCENARIOS[0].language);
 
   const [activeTab, setActiveTab] = useState<'review' | 'diff' | 'research' | 'chat'>('review');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [isGuideOpen, setIsGuideOpen] = useState<boolean>(true);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const [providerConfig, setProviderConfig] = useState<ProviderConfig>({
@@ -34,17 +32,18 @@ export const App: React.FC = () => {
   });
 
   const [report, setReport] = useState<AnalysisReport>(() =>
-    analyzeCode(SCENARIOS[0].code, SCENARIOS[0].language, 'staff-systems')
+    analyzeCode(SCENARIOS[0].code, SCENARIOS[0].language, 'security-auditor')
   );
 
   const activePersona = PERSONAS[activePersonaId];
+  const criticalCount = report.issues.filter((i) => i.severity === 'critical').length;
 
   const addToast = (type: 'success' | 'error' | 'info', text: string) => {
     const id = String(Date.now() + Math.random());
     setToasts((prev) => [...prev, { id, type, text }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3200);
+    }, 2800);
   };
 
   const handleDismissToast = (id: string) => {
@@ -68,7 +67,7 @@ export const App: React.FC = () => {
     setSelectedScenarioId(id);
     if (id === 'custom') {
       setCode('');
-      addToast('info', 'Switched to Custom Code editor. Paste or type your code!');
+      addToast('info', 'Switched to clean blank editor');
       return;
     }
     const found = SCENARIOS.find((s) => s.id === id);
@@ -76,7 +75,7 @@ export const App: React.FC = () => {
       setCode(found.code);
       setLanguage(found.language);
       handleRunAnalysis(found.code, found.language, activePersonaId);
-      addToast('info', `Loaded preset: ${found.name}`);
+      addToast('info', `Loaded: ${found.name}`);
     }
   };
 
@@ -84,28 +83,27 @@ export const App: React.FC = () => {
     setActivePersonaId(pid);
     handleRunAnalysis(code, language, pid);
     const p = PERSONAS[pid];
-    addToast('info', `Reviewer switched to ${p.name} (${p.role})`);
+    addToast('info', `Focus changed: ${p.name}`);
   };
 
   const handleApplyFix = (_fixSnippet: string) => {
-    // Cleanly replace with the refactored code to eliminate all flaws
     const updated = report.refactoredCode;
     setCode(updated);
     handleRunAnalysis(updated, language, activePersonaId);
-    addToast('success', 'Fix applied! Health score updated in editor.');
+    addToast('success', 'Hardened fix applied to editor');
   };
 
   const handleApplyRefactor = (refactored: string) => {
     setCode(refactored);
     handleRunAnalysis(refactored, language, activePersonaId);
     setActiveTab('review');
-    addToast('success', 'Complete refactor applied! Code is now fully hardened.');
+    addToast('success', 'Complete refactored patch applied');
   };
 
   const handleExportReport = () => {
-    const md = `# CodeLens Audit Report: ${selectedScenarioId}
+    const md = `# CodeLens Audit Report
 **Date:** ${new Date().toISOString()}  
-**Reviewer:** ${activePersona.name} (${activePersona.role})  
+**Focus Lens:** ${activePersona.name}  
 **Overall Health Score:** ${report.scores.overall}/100  
 **Time Complexity:** ${report.complexity.timeComplexity} | **Space:** ${report.complexity.spaceComplexity}
 
@@ -130,10 +128,10 @@ ${issue.codeFix ? `\`\`\`${language}\n${issue.codeFix}\n\`\`\`` : ''}
   )
   .join('\n')}
 
-## Algorithmic Invariants & Proofs
+## Algorithmic Complexity & Bounds
 ${report.complexity.explanation}
 
-## Synthesized Regression Test Suite
+## Automated Test Harness
 \`\`\`${language}
 ${report.testSuiteSuggestion}
 \`\`\`
@@ -146,12 +144,12 @@ ${report.testSuiteSuggestion}
     a.download = `codelens-report-${Date.now()}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    addToast('success', 'Audit report downloaded as Markdown (.md)');
+    addToast('success', 'Report downloaded as Markdown (.md)');
   };
 
   const handleCopyPatch = async () => {
     await navigator.clipboard.writeText(report.unifiedDiff);
-    addToast('success', 'Unified .patch copied to clipboard!');
+    addToast('success', 'Unified .patch copied to clipboard');
   };
 
   // Re-run analysis on code change with debounce
@@ -168,27 +166,22 @@ ${report.testSuiteSuggestion}
         scenarios={SCENARIOS}
         selectedScenarioId={selectedScenarioId}
         onSelectScenario={handleSelectScenario}
-        activePersona={activePersonaId}
-        onSelectPersona={handleSelectPersona}
         onRunAnalysis={() => {
           handleRunAnalysis();
-          addToast('info', 'Audit refreshed!');
+          addToast('info', 'Audit refreshed');
         }}
         onExportReport={handleExportReport}
         onCopyPatch={handleCopyPatch}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onToggleGuide={() => setIsGuideOpen(!isGuideOpen)}
         isAnalyzing={isAnalyzing}
       />
-
-      <QuickGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
 
       <MetricsBar
         scores={report.scores}
         complexity={report.complexity}
-        persona={activePersona}
         loc={report.loc}
         issueCount={report.issues.length}
+        criticalCount={criticalCount}
       />
 
       <main className="workspace-grid">
@@ -213,7 +206,7 @@ ${report.testSuiteSuggestion}
               onClick={() => setActiveTab('review')}
             >
               <ShieldAlert size={14} />
-              <span>Review Findings</span>
+              <span>Findings</span>
               <span className="tab-badge">{report.issues.length}</span>
             </button>
 
@@ -222,7 +215,7 @@ ${report.testSuiteSuggestion}
               onClick={() => setActiveTab('diff')}
             >
               <GitCompare size={14} />
-              <span>Unified Diff & Patch</span>
+              <span>Diff & Fix</span>
             </button>
 
             <button
@@ -230,7 +223,7 @@ ${report.testSuiteSuggestion}
               onClick={() => setActiveTab('research')}
             >
               <BookOpen size={14} />
-              <span>Research & Complexity</span>
+              <span>Complexity & Big-O</span>
             </button>
 
             <button
@@ -238,7 +231,7 @@ ${report.testSuiteSuggestion}
               onClick={() => setActiveTab('chat')}
             >
               <MessageSquareCode size={14} />
-              <span>Interactive Assistant</span>
+              <span>AI Assistant</span>
             </button>
           </div>
 
@@ -247,6 +240,8 @@ ${report.testSuiteSuggestion}
               <ReviewPanel
                 issues={report.issues}
                 summary={report.summary}
+                activeLens={activePersonaId}
+                onSelectLens={handleSelectPersona}
                 onApplyFix={handleApplyFix}
                 onViewDiffTab={() => setActiveTab('diff')}
               />
@@ -289,7 +284,7 @@ ${report.testSuiteSuggestion}
         config={providerConfig}
         onSave={(cfg) => {
           setProviderConfig(cfg);
-          addToast('success', 'Engine settings saved!');
+          addToast('success', 'Settings saved');
         }}
       />
 
