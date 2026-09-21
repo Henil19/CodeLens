@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, ArrowRight, Download, Columns, AlignJustify, Sparkles } from 'lucide-react';
+import { Copy, Check, Download, Columns, AlignJustify, Sparkles } from 'lucide-react';
 import { generateUnifiedDiff } from '../engine/diff';
 
 interface DiffViewerProps {
