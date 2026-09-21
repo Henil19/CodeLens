@@ -1,7 +1,20 @@
 import React, { useState } from 'react';
 import { CodeIssue, Severity, PersonaId } from '../types';
 import { PERSONAS } from '../engine/personas';
-import { AlertCircle, AlertTriangle, Info, Zap, ChevronDown, ChevronRight, Check, CheckCircle2, ArrowRight } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  Zap,
+  ChevronDown,
+  ChevronRight,
+  Check,
+  CheckCircle2,
+  ArrowRight,
+  Sparkles,
+  ShieldCheck,
+  Copy
+} from 'lucide-react';
 
 interface ReviewPanelProps {
   issues: CodeIssue[];
@@ -20,32 +33,60 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
   onApplyFix,
   onViewDiffTab
 }) => {
-  const [filter, setFilter] = useState<Severity | 'all'>('all');
+  const [filter, setFilter] = useState<Severity | 'all' | 'resolved'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(issues.length > 0 ? issues[0].id : null);
-  const [appliedFixes, setAppliedFixes] = useState<Record<string, boolean>>({});
+  const [resolvedIds, setResolvedIds] = useState<Record<string, boolean>>({});
+  const [copiedSnippetId, setCopiedSnippetId] = useState<string | null>(null);
 
-  const filteredIssues = issues.filter((i) => {
-    if (filter === 'all') return true;
-    return i.severity === filter;
-  });
+  const handleToggleResolve = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setResolvedIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
-  const getSeverityIcon = (severity: Severity) => {
-    switch (severity) {
-      case 'critical':
-        return <AlertCircle size={14} color="var(--accent-rose)" />;
-      case 'warning':
-        return <AlertTriangle size={14} color="var(--accent-amber)" />;
-      case 'optimization':
-        return <Zap size={14} color="var(--accent-primary)" />;
-      case 'info':
-        return <Info size={14} color="var(--accent-purple)" />;
+  const handleApply = (issueId: string, fix: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (onApplyFix) {
+      onApplyFix(fix);
+      setResolvedIds((prev) => ({ ...prev, [issueId]: true }));
     }
   };
 
-  const handleApply = (issueId: string, fix: string) => {
-    if (onApplyFix) {
-      onApplyFix(fix);
-      setAppliedFixes((prev) => ({ ...prev, [issueId]: true }));
+  const handleCopySnippet = async (id: string, snippet: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(snippet);
+    setCopiedSnippetId(id);
+    setTimeout(() => setCopiedSnippetId(null), 2000);
+  };
+
+  const handleResolveAll = () => {
+    const allResolved: Record<string, boolean> = {};
+    for (const issue of issues) {
+      allResolved[issue.id] = true;
+    }
+    setResolvedIds(allResolved);
+  };
+
+  const filteredIssues = issues.filter((i) => {
+    const isResolved = Boolean(resolvedIds[i.id]);
+    if (filter === 'resolved') return isResolved;
+    if (filter === 'all') return !isResolved;
+    return i.severity === filter && !isResolved;
+  });
+
+  const resolvedCount = Object.values(resolvedIds).filter(Boolean).length;
+  const activeIssuesCount = issues.length - resolvedCount;
+
+  const getSeverityIcon = (severity: Severity, isResolved: boolean) => {
+    if (isResolved) return <CheckCircle2 size={15} color="var(--accent-emerald)" />;
+    switch (severity) {
+      case 'critical':
+        return <AlertCircle size={15} color="var(--accent-rose)" />;
+      case 'warning':
+        return <AlertTriangle size={15} color="var(--accent-amber)" />;
+      case 'optimization':
+        return <Zap size={15} color="var(--accent-primary)" />;
+      case 'info':
+        return <Info size={15} color="#a5b4fc" />;
     }
   };
 
@@ -53,7 +94,8 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
 
   return (
     <div>
-      <div className="lens-selector-row">
+      {/* Top Controls: Lens Switcher & Filters */}
+      <div className="findings-topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
           <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Focus Lens:</span>
           <div className="lens-pills">
@@ -73,41 +115,64 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
           </div>
         </div>
 
-        <div className="filter-pills">
-          <button
-            className={`filter-pill ${filter === 'all' ? 'active' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            All ({issues.length})
-          </button>
-          <button
-            className={`filter-pill ${filter === 'critical' ? 'active' : ''}`}
-            onClick={() => setFilter('critical')}
-          >
-            Critical ({issues.filter((i) => i.severity === 'critical').length})
-          </button>
-          <button
-            className={`filter-pill ${filter === 'warning' ? 'active' : ''}`}
-            onClick={() => setFilter('warning')}
-          >
-            Warnings ({issues.filter((i) => i.severity === 'warning').length})
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="filter-pills">
+            <button
+              className={`filter-pill ${filter === 'all' ? 'active' : ''}`}
+              onClick={() => setFilter('all')}
+            >
+              Open ({activeIssuesCount})
+            </button>
+            <button
+              className={`filter-pill ${filter === 'critical' ? 'active' : ''}`}
+              onClick={() => setFilter('critical')}
+            >
+              Critical ({issues.filter((i) => i.severity === 'critical' && !resolvedIds[i.id]).length})
+            </button>
+            <button
+              className={`filter-pill ${filter === 'warning' ? 'active' : ''}`}
+              onClick={() => setFilter('warning')}
+            >
+              Warnings ({issues.filter((i) => i.severity === 'warning' && !resolvedIds[i.id]).length})
+            </button>
+            {resolvedCount > 0 && (
+              <button
+                className={`filter-pill ${filter === 'resolved' ? 'active' : ''}`}
+                onClick={() => setFilter('resolved')}
+                style={{ color: 'var(--accent-emerald)' }}
+              >
+                ✓ Resolved ({resolvedCount})
+              </button>
+            )}
+          </div>
+
+          {activeIssuesCount > 0 && (
+            <button
+              className="btn-secondary"
+              onClick={handleResolveAll}
+              title="Mark all flagged items as resolved"
+              style={{ fontSize: '0.72rem', padding: '0.22rem 0.55rem' }}
+            >
+              Resolve All
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Summary Box */}
       <div
         style={{
           background: 'rgba(255, 255, 255, 0.02)',
           border: '1px solid var(--border-subtle)',
           borderRadius: 'var(--radius-md)',
-          padding: '0.75rem 0.95rem',
-          fontSize: '0.8rem',
-          lineHeight: '1.5',
-          marginBottom: '1rem',
+          padding: '0.85rem 1.15rem',
+          fontSize: '0.82rem',
+          lineHeight: '1.55',
+          marginBottom: '1.15rem',
           color: 'var(--text-secondary)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
             Audit Summary ({PERSONAS[activeLens].name}):
           </span>
@@ -118,63 +183,97 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
                 background: 'transparent',
                 border: 'none',
                 color: 'var(--accent-primary)',
-                fontSize: '0.74rem',
+                fontSize: '0.76rem',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '3px',
+                gap: '4px',
                 fontWeight: 600
               }}
             >
               <span>View Diff & Fix</span>
-              <ArrowRight size={12} />
+              <ArrowRight size={13} />
             </button>
           )}
         </div>
         <div>{summary}</div>
       </div>
 
+      {/* Findings List */}
       {filteredIssues.length === 0 ? (
         <div
           style={{
-            background: 'rgba(16, 185, 129, 0.05)',
-            border: '1px solid rgba(16, 185, 129, 0.2)',
+            background: 'rgba(16, 185, 129, 0.04)',
+            border: '1px solid rgba(16, 185, 129, 0.18)',
             borderRadius: 'var(--radius-md)',
-            padding: '1.75rem',
+            padding: '2.5rem 1.5rem',
             textAlign: 'center',
             color: 'var(--accent-emerald)'
           }}
         >
-          <CheckCircle2 size={32} style={{ margin: '0 auto 0.5rem' }} />
-          <h3 style={{ fontSize: '0.92rem', fontWeight: 600, marginBottom: '0.2rem' }}>
-            No Issues Found in this Category
+          <ShieldCheck size={36} style={{ margin: '0 auto 0.6rem' }} />
+          <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+            {filter === 'resolved'
+              ? 'No resolved issues yet'
+              : 'All Identified Issues Resolved!'}
           </h3>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-            The code passes all checks for the selected filter.
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', maxWidth: '420px', margin: '0 auto' }}>
+            {filter === 'resolved'
+              ? 'Click "Resolve" or "Apply Fix" on any issue to mark it as resolved.'
+              : 'Your code adheres to standard best practices with no active defects in this filter.'}
           </p>
         </div>
       ) : (
         <div className="findings-list">
           {filteredIssues.map((issue) => {
             const isExpanded = expandedId === issue.id;
+            const isResolved = Boolean(resolvedIds[issue.id]);
+
             return (
-              <div key={issue.id} className={`finding-card ${issue.severity}`}>
+              <div
+                key={issue.id}
+                className={`finding-card ${isResolved ? 'resolved' : issue.severity}`}
+              >
                 <div
                   className="finding-header"
                   style={{ cursor: 'pointer' }}
                   onClick={() => setExpandedId(isExpanded ? null : issue.id)}
                 >
                   <div className="finding-title-group">
-                    {getSeverityIcon(issue.severity)}
-                    <span className={`severity-tag ${issue.severity}`}>{issue.severity}</span>
-                    <span className="line-anchor">
-                      L{issue.lineStart}
-                      {issue.lineEnd !== issue.lineStart ? `–L${issue.lineEnd}` : ''}
+                    {getSeverityIcon(issue.severity, isResolved)}
+                    <span className={`severity-tag ${isResolved ? 'resolved' : issue.severity}`}>
+                      {isResolved ? 'Resolved' : issue.severity}
                     </span>
-                    <span className="finding-title">{issue.title}</span>
+                    <span className="line-anchor">
+                      Line {issue.lineStart}
+                      {issue.lineEnd !== issue.lineStart ? `–${issue.lineEnd}` : ''}
+                    </span>
+                    <span
+                      className="finding-title"
+                      style={{ textDecoration: isResolved ? 'line-through' : 'none' }}
+                    >
+                      {issue.title}
+                    </span>
                   </div>
-                  <div style={{ color: 'var(--text-muted)' }}>
-                    {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button
+                      className="btn-secondary"
+                      onClick={(e) => handleToggleResolve(issue.id, e)}
+                      title={isResolved ? 'Re-open issue' : 'Mark as resolved'}
+                      style={{
+                        padding: '0.15rem 0.45rem',
+                        fontSize: '0.7rem',
+                        color: isResolved ? 'var(--accent-emerald)' : 'var(--text-muted)'
+                      }}
+                    >
+                      {isResolved ? <Check size={12} /> : null}
+                      <span>{isResolved ? 'Resolved' : 'Dismiss'}</span>
+                    </button>
+
+                    <div style={{ color: 'var(--text-muted)' }}>
+                      {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                    </div>
                   </div>
                 </div>
 
@@ -183,51 +282,58 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
                 <div className="finding-meta-row">
                   {issue.cwe && <span style={{ color: 'var(--accent-rose)' }}>🛡️ {issue.cwe}</span>}
                   {issue.benchmarkImpact && (
-                    <span>⚡ <strong>Impact:</strong> {issue.benchmarkImpact}</span>
+                    <span>
+                      ⚡ <strong>Impact:</strong> {issue.benchmarkImpact}
+                    </span>
                   )}
                 </div>
 
                 <div
                   style={{
-                    fontSize: '0.78rem',
+                    fontSize: '0.8rem',
                     color: 'var(--text-secondary)',
-                    marginTop: '0.35rem',
-                    paddingTop: '0.35rem',
+                    marginTop: '0.45rem',
+                    paddingTop: '0.45rem',
                     borderTop: '1px solid var(--border-subtle)'
                   }}
                 >
-                  <strong style={{ color: 'var(--text-primary)' }}>Remediation:</strong>{' '}
+                  <strong style={{ color: 'var(--text-primary)' }}>Remediation Advice:</strong>{' '}
                   {issue.recommendation}
                 </div>
 
                 {issue.codeFix && (
-                  <div style={{ marginTop: '0.65rem' }}>
+                  <div style={{ marginTop: '0.75rem' }}>
                     <div
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        fontSize: '0.72rem',
+                        fontSize: '0.74rem',
                         color: 'var(--text-muted)',
-                        marginBottom: '0.25rem'
+                        marginBottom: '0.35rem'
                       }}
                     >
-                      <span style={{ fontWeight: 600 }}>Suggested Replacement:</span>
-                      {onApplyFix && (
+                      <span style={{ fontWeight: 600 }}>Suggested Replacement Code:</span>
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
                         <button
-                          className="btn-primary"
+                          className="btn-secondary"
                           style={{ padding: '0.15rem 0.5rem', fontSize: '0.7rem' }}
-                          onClick={() => handleApply(issue.id, issue.codeFix!)}
+                          onClick={(e) => handleCopySnippet(issue.id, issue.codeFix!, e)}
                         >
-                          {appliedFixes[issue.id] ? (
-                            <>
-                              <Check size={11} color="#fff" /> Applied!
-                            </>
-                          ) : (
-                            'Apply Fix to Editor'
-                          )}
+                          {copiedSnippetId === issue.id ? <Check size={11} color="var(--accent-emerald)" /> : <Copy size={11} />}
+                          <span>{copiedSnippetId === issue.id ? 'Copied' : 'Copy'}</span>
                         </button>
-                      )}
+                        {onApplyFix && (
+                          <button
+                            className="btn-primary"
+                            style={{ padding: '0.15rem 0.6rem', fontSize: '0.7rem' }}
+                            onClick={(e) => handleApply(issue.id, issue.codeFix!, e)}
+                          >
+                            <Sparkles size={11} />
+                            <span>{isResolved ? 'Re-Apply Fix' : 'Apply Fix to Code'}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <pre className="code-fix-block">
                       <code>{issue.codeFix}</code>
