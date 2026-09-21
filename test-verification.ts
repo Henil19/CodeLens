@@ -59,9 +59,9 @@ for (const scenario of SCENARIOS) {
 }
 
 // ----------------------------------------------------
-// Test Group 3: Multi-Persona Perspectives
+// Test Group 3: Professional Audit Lenses
 // ----------------------------------------------------
-console.log('\n--- Test Group 3: Persona Perspectives & Tone ---');
+console.log('\n--- Test Group 3: Audit Lenses & Perspectives ---');
 
 const sampleCode = SCENARIOS[1].code; // Go timing attack
 const personaKeys: PersonaId[] = ['staff-systems', 'security-auditor', 'clean-architect', 'academic-cs'];
@@ -69,7 +69,7 @@ const personaKeys: PersonaId[] = ['staff-systems', 'security-auditor', 'clean-ar
 for (const pid of personaKeys) {
   const p = PERSONAS[pid];
   const rep = analyzeCode(sampleCode, 'go', pid);
-  assert(rep.summary.includes(p.name), `Summary adapts to persona: ${p.name} (${p.role})`);
+  assert(rep.summary.includes(p.name), `Summary adapts to lens: ${p.name}`);
 }
 
 // ----------------------------------------------------
