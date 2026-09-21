@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Send, Bot, User, Copy, Check, Sparkles } from 'lucide-react';
 import { ChatMessage, CodeIssue, ComplexityResult, PersonaProfile, ProviderConfig } from '../types';
 
@@ -9,6 +9,7 @@ interface AssistantChatProps {
   complexity: ComplexityResult;
   persona: PersonaProfile;
   providerConfig: ProviderConfig;
+  initialPrompt?: string;
 }
 
 export const AssistantChat: React.FC<AssistantChatProps> = ({
@@ -17,7 +18,8 @@ export const AssistantChat: React.FC<AssistantChatProps> = ({
   issues,
   complexity,
   persona,
-  providerConfig
+  providerConfig,
+  initialPrompt
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -36,6 +38,12 @@ export const AssistantChat: React.FC<AssistantChatProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialPrompt && initialPrompt.trim()) {
+      handleSend(initialPrompt);
+    }
+  }, [initialPrompt]);
 
   const handleCopyMessage = async (id: string, text: string) => {
     await navigator.clipboard.writeText(text);
