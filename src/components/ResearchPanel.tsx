@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ComplexityResult, LiteratureRef } from '../types';
-import { BookOpen, Check, Copy } from 'lucide-react';
+import { BookOpen, Check, Copy, Gauge, ShieldCheck, Terminal } from 'lucide-react';
 
 interface ResearchPanelProps {
   complexity: ComplexityResult;
@@ -21,18 +21,53 @@ export const ResearchPanel: React.FC<ResearchPanelProps> = ({
     setTimeout(() => setCopiedTest(false), 2000);
   };
 
+  const getComplexityRating = (timeStr: string) => {
+    if (timeStr.includes('1')) {
+      return { label: 'Optimal / Constant Time', color: 'var(--accent-emerald)', desc: 'Immediate execution unaffected by input dataset size.' };
+    }
+    if (timeStr.includes('log')) {
+      return { label: 'Sub-Linear / Logarithmic', color: 'var(--accent-cyan)', desc: 'High scalability, standard for tree lookups or efficient binary operations.' };
+    }
+    if (timeStr.includes('N²') || timeStr.includes('M')) {
+      return { label: 'Quadratic / Bottleneck Risk', color: 'var(--accent-rose)', desc: 'Multiplicative scaling: 10,000 items requires ~100M operations. High risk under production load.' };
+    }
+    return { label: 'Linear Traversal', color: 'var(--accent-amber)', desc: 'Single-pass throughput scaling proportionally with dataset length.' };
+  };
+
+  const rating = getComplexityRating(complexity.timeComplexity);
+
   return (
     <div className="research-grid">
       <div className="research-card">
-        <h3>
-          <span>📐</span> Algorithmic Complexity Derivation
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+          <h3>
+            <Gauge size={16} color="var(--accent-cyan)" /> Algorithmic Complexity & Asymptotic Bounds
+          </h3>
+          <div
+            style={{
+              fontSize: '0.74rem',
+              padding: '0.2rem 0.6rem',
+              borderRadius: '999px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: `1px solid ${rating.color}`,
+              color: rating.color,
+              fontWeight: 600
+            }}
+          >
+            {rating.label}
+          </div>
+        </div>
+
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', lineHeight: '1.5' }}>
+          {rating.desc}
+        </p>
+
         <table className="complexity-table">
           <thead>
             <tr>
-              <th>Dimension</th>
+              <th>Evaluation Dimension</th>
               <th>Order of Growth</th>
-              <th>Behavioral Boundary</th>
+              <th>Behavioral Limit</th>
             </tr>
           </thead>
           <tbody>
@@ -49,28 +84,25 @@ export const ResearchPanel: React.FC<ResearchPanelProps> = ({
             <tr>
               <td>Space Complexity</td>
               <td style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{complexity.spaceComplexity}</td>
-              <td>Auxiliary working heap / stack space</td>
+              <td>Auxiliary working memory allocation</td>
             </tr>
             <tr>
-              <td>Recursion / Call Stack</td>
+              <td>Call Stack / Recursion</td>
               <td style={{ color: 'var(--accent-indigo)' }}>{complexity.recursionDepth}</td>
-              <td>Maximum runtime frame depth</td>
+              <td>Maximum runtime frame overhead</td>
             </tr>
           </tbody>
         </table>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-          {complexity.explanation}
-        </p>
 
         {complexity.invariants.length > 0 && (
           <div style={{ marginTop: '0.85rem' }}>
             <div style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.35rem' }}>
-              Loop & Invariant Guarantees:
+              Invariant Guarantees & Correctness Proofs:
             </div>
             <ul className="invariants-list">
               {complexity.invariants.map((inv, idx) => (
                 <li key={idx}>
-                  <span style={{ color: 'var(--accent-cyan)' }}>•</span>
+                  <ShieldCheck size={14} color="var(--accent-cyan)" style={{ flexShrink: 0, marginTop: '2px' }} />
                   <span>{inv}</span>
                 </li>
               ))}
@@ -81,8 +113,11 @@ export const ResearchPanel: React.FC<ResearchPanelProps> = ({
 
       <div className="research-card">
         <h3>
-          <BookOpen size={16} /> Academic Literature & RFC Citations
+          <BookOpen size={16} color="var(--accent-indigo)" /> Academic Literature & RFC Citations
         </h3>
+        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+          Industry standard papers and RFC specifications applicable to the detected code patterns.
+        </p>
         <div className="references-list">
           {references.map((ref, idx) => (
             <div key={idx} className="reference-card">
@@ -91,8 +126,8 @@ export const ResearchPanel: React.FC<ResearchPanelProps> = ({
                 {ref.authorsOrSource} {ref.year ? `(${ref.year})` : ''}
               </div>
               <p className="reference-summary">{ref.summary}</p>
-              <div style={{ fontSize: '0.74rem', color: 'var(--accent-indigo)', marginTop: '0.35rem' }}>
-                ↳ <strong>Application:</strong> {ref.relevance}
+              <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', marginTop: '0.35rem' }}>
+                ↳ <strong>Practical Implication:</strong> {ref.relevance}
               </div>
             </div>
           ))}
@@ -102,19 +137,20 @@ export const ResearchPanel: React.FC<ResearchPanelProps> = ({
       <div className="research-card">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
           <h3>
-            <span>🧪</span> Synthesized Regression & Test Suite
+            <Terminal size={16} color="var(--accent-emerald)" /> Synthesized Regression & Test Harness
           </h3>
           <button
             className="btn-action btn-ghost"
             onClick={handleCopyTest}
+            title="Copy test suite to clipboard"
             style={{ fontSize: '0.74rem', padding: '0.2rem 0.6rem' }}
           >
             {copiedTest ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
-            <span>{copiedTest ? 'Copied' : 'Copy Test Suite'}</span>
+            <span>{copiedTest ? 'Copied!' : 'Copy Test Suite'}</span>
           </button>
         </div>
         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-          Automated edge-case and regression harness targeting the identified failure modes.
+          Targeted edge-case and regression tests generated specifically to guard against the identified vulnerabilities.
         </p>
         <pre className="code-fix-block" style={{ maxHeight: '280px', overflowY: 'auto' }}>
           <code>{testSuite}</code>
