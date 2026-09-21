@@ -13,7 +13,8 @@ import {
   ArrowRight,
   Sparkles,
   ShieldCheck,
-  Copy
+  Copy,
+  MessageSquareCode
 } from 'lucide-react';
 
 interface ReviewPanelProps {
@@ -22,7 +23,9 @@ interface ReviewPanelProps {
   activeLens: PersonaId;
   onSelectLens: (lensId: PersonaId) => void;
   onApplyFix?: (fixSnippet: string) => void;
+  onApplyAllFixes?: () => void;
   onViewDiffTab?: () => void;
+  onAskAI?: (prompt: string) => void;
 }
 
 export const ReviewPanel: React.FC<ReviewPanelProps> = ({
@@ -31,7 +34,9 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
   activeLens,
   onSelectLens,
   onApplyFix,
-  onViewDiffTab
+  onApplyAllFixes,
+  onViewDiffTab,
+  onAskAI
 }) => {
   const [filter, setFilter] = useState<Severity | 'all' | 'resolved'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(issues.length > 0 ? issues[0].id : null);
@@ -84,9 +89,9 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
       case 'warning':
         return <AlertTriangle size={15} color="var(--accent-amber)" />;
       case 'optimization':
-        return <Zap size={15} color="var(--accent-primary)" />;
+        return <Zap size={15} color="var(--accent-cyan)" />;
       case 'info':
-        return <Info size={15} color="#a5b4fc" />;
+        return <Info size={15} color="var(--accent-purple)" />;
     }
   };
 
@@ -94,66 +99,95 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
 
   return (
     <div>
-      {/* Top Controls: Lens Switcher & Filters */}
-      <div className="findings-topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Focus Lens:</span>
-          <div className="lens-pills">
-            {lensKeys.map((lid) => {
-              const p = PERSONAS[lid];
-              return (
-                <button
-                  key={lid}
-                  className={`lens-pill ${activeLens === lid ? 'active' : ''}`}
-                  onClick={() => onSelectLens(lid)}
-                  title={p.tagline}
-                >
-                  <span>{p.avatar}</span> <span>{p.name}</span>
-                </button>
-              );
-            })}
+      {/* Streamlined Unified Toolbar: Lens + Filter + Quick Actions */}
+      <div
+        className="findings-topbar"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+          background: 'rgba(255, 255, 255, 0.02)',
+          padding: '0.85rem 1rem',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-subtle)',
+          marginBottom: '1rem'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-muted)' }}>Focus Lens:</span>
+            <select
+              value={activeLens}
+              onChange={(e) => onSelectLens(e.target.value as PersonaId)}
+              className="dropdown-select"
+              style={{ padding: '0.25rem 0.65rem', fontSize: '0.76rem' }}
+            >
+              {lensKeys.map((lid) => {
+                const p = PERSONAS[lid];
+                return (
+                  <option key={lid} value={lid}>
+                    {p.avatar} {p.name}
+                  </option>
+                );
+              })}
+            </select>
           </div>
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div className="filter-pills">
-            <button
-              className={`filter-pill ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilter('all')}
-            >
-              Open ({activeIssuesCount})
-            </button>
-            <button
-              className={`filter-pill ${filter === 'critical' ? 'active' : ''}`}
-              onClick={() => setFilter('critical')}
-            >
-              Critical ({issues.filter((i) => i.severity === 'critical' && !resolvedIds[i.id]).length})
-            </button>
-            <button
-              className={`filter-pill ${filter === 'warning' ? 'active' : ''}`}
-              onClick={() => setFilter('warning')}
-            >
-              Warnings ({issues.filter((i) => i.severity === 'warning' && !resolvedIds[i.id]).length})
-            </button>
-            {resolvedCount > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            {onApplyAllFixes && activeIssuesCount > 0 && (
               <button
-                className={`filter-pill ${filter === 'resolved' ? 'active' : ''}`}
-                onClick={() => setFilter('resolved')}
-                style={{ color: 'var(--accent-emerald)' }}
+                className="btn-glow"
+                onClick={onApplyAllFixes}
+                title="Automatically apply all recommended fixes to code"
+                style={{ fontSize: '0.74rem', padding: '0.28rem 0.75rem' }}
               >
-                ✓ Resolved ({resolvedCount})
+                <Sparkles size={12} />
+                <span>Auto-Fix All ({activeIssuesCount})</span>
+              </button>
+            )}
+
+            {activeIssuesCount > 0 && (
+              <button
+                className="btn-secondary"
+                onClick={handleResolveAll}
+                title="Mark all as resolved"
+                style={{ fontSize: '0.72rem', padding: '0.26rem 0.55rem' }}
+              >
+                Resolve All
               </button>
             )}
           </div>
+        </div>
 
-          {activeIssuesCount > 0 && (
+        {/* Filter Pills with vibrant glowing tags */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+          <button
+            className={`filter-pill ${filter === 'all' ? 'active' : ''}`}
+            onClick={() => setFilter('all')}
+          >
+            All Open ({activeIssuesCount})
+          </button>
+          <button
+            className={`filter-pill ${filter === 'critical' ? 'active' : ''}`}
+            onClick={() => setFilter('critical')}
+            style={{ color: 'var(--accent-rose)' }}
+          >
+            Critical ({issues.filter((i) => i.severity === 'critical' && !resolvedIds[i.id]).length})
+          </button>
+          <button
+            className={`filter-pill ${filter === 'warning' ? 'active' : ''}`}
+            onClick={() => setFilter('warning')}
+            style={{ color: 'var(--accent-amber)' }}
+          >
+            Warnings ({issues.filter((i) => i.severity === 'warning' && !resolvedIds[i.id]).length})
+          </button>
+          {resolvedCount > 0 && (
             <button
-              className="btn-secondary"
-              onClick={handleResolveAll}
-              title="Mark all flagged items as resolved"
-              style={{ fontSize: '0.72rem', padding: '0.22rem 0.55rem' }}
+              className={`filter-pill ${filter === 'resolved' ? 'active' : ''}`}
+              onClick={() => setFilter('resolved')}
+              style={{ color: 'var(--accent-emerald)' }}
             >
-              Resolve All
+              ✓ Resolved ({resolvedCount})
             </button>
           )}
         </div>
@@ -315,6 +349,20 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
                     >
                       <span style={{ fontWeight: 600 }}>Suggested Replacement Code:</span>
                       <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        {onAskAI && (
+                          <button
+                            className="btn-secondary"
+                            style={{ padding: '0.15rem 0.5rem', fontSize: '0.7rem' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAskAI(`Can you explain line by line why this is an issue: "${issue.title}" and how the remediation fixes it?`);
+                            }}
+                            title="Ask AI Assistant to explain this issue"
+                          >
+                            <MessageSquareCode size={11} color="var(--accent-cyan)" />
+                            <span>Explain</span>
+                          </button>
+                        )}
                         <button
                           className="btn-secondary"
                           style={{ padding: '0.15rem 0.5rem', fontSize: '0.7rem' }}
