@@ -1,5 +1,5 @@
-import React from 'react';
-import { Trash2, Copy, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, Copy, Check, Wand2, ZoomIn, ZoomOut, AlignLeft } from 'lucide-react';
 
 interface CodeEditorProps {
   code: string;
@@ -7,6 +7,7 @@ interface CodeEditorProps {
   language: string;
   onLanguageChange: (lang: string) => void;
   onReset: () => void;
+  onToast?: (type: 'success' | 'error' | 'info', text: string) => void;
 }
 
 export const CodeEditor: React.FC<CodeEditorProps> = ({
@@ -14,9 +15,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onChange,
   language,
   onLanguageChange,
-  onReset
+  onReset,
+  onToast
 }) => {
-  const [copied, setCopied] = React.useState(false);
+  const [copied, setCopied] = useState(false);
+  const [fontSize, setFontSize] = useState<number>(13.5);
+  const [wrapLines, setWrapLines] = useState<boolean>(false);
 
   const lines = code.split('\n');
   const lineCount = lines.length;
@@ -24,25 +28,39 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code);
     setCopied(true);
+    if (onToast) onToast('success', 'Source code copied to clipboard!');
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleFormat = () => {
+    const rawLines = code.split('\n');
+    let indent = 0;
+    const formatted = rawLines.map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('}') || trimmed.startsWith(']') || trimmed.startsWith(')')) {
+        indent = Math.max(0, indent - 1);
+      }
+      const indented = '  '.repeat(indent) + trimmed;
+      if (trimmed.endsWith('{') || trimmed.endsWith('[') || trimmed.endsWith('(')) {
+        indent++;
+      }
+      return indented;
+    }).join('\n');
+
+    onChange(formatted);
+    if (onToast) onToast('info', 'Code auto-formatted & cleaned');
   };
 
   return (
     <div className="editor-pane">
       <div className="editor-toolbar">
-        <div className="file-info">
+        <div className="file-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <select
             value={language}
             onChange={(e) => onLanguageChange(e.target.value)}
-            style={{
-              background: 'var(--bg-primary)',
-              color: 'var(--text-main)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '4px',
-              padding: '2px 8px',
-              fontSize: '0.76rem',
-              outline: 'none'
-            }}
+            className="dropdown-select"
+            style={{ padding: '0.2rem 0.6rem', fontSize: '0.74rem' }}
           >
             <option value="typescript">TypeScript (.ts)</option>
             <option value="javascript">JavaScript (.js)</option>
@@ -53,36 +71,75 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             <option value="cpp">C++ (.cpp)</option>
             <option value="sql">SQL (.sql)</option>
           </select>
-          <span>•</span>
-          <span>{lineCount} lines</span>
-          <span>•</span>
-          <span>{(code.length / 1024).toFixed(1)} KB</span>
+          <span className="stat-pill" style={{ color: 'var(--text-muted)' }}>
+            <strong>{lineCount}</strong> lines
+          </span>
+          <span className="stat-pill" style={{ color: 'var(--text-muted)' }}>
+            <strong>{(code.length / 1024).toFixed(1)}</strong> KB
+          </span>
         </div>
 
-        <div className="editor-actions">
+        <div className="editor-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <button
-            className="btn-action btn-ghost"
+            className="btn-secondary"
+            onClick={handleFormat}
+            title="Auto-Format & Indent Code"
+            style={{ padding: '0.22rem 0.55rem', fontSize: '0.74rem' }}
+          >
+            <Wand2 size={12} color="var(--accent-indigo)" />
+            <span>Format</span>
+          </button>
+
+          <button
+            className="btn-secondary"
+            onClick={() => setWrapLines(!wrapLines)}
+            title={wrapLines ? 'Disable Line Wrap' : 'Enable Line Wrap'}
+            style={{ padding: '0.22rem 0.45rem', fontSize: '0.74rem', color: wrapLines ? 'var(--accent-primary)' : undefined }}
+          >
+            <AlignLeft size={12} />
+          </button>
+
+          <button
+            className="btn-secondary"
+            onClick={() => setFontSize((s) => Math.max(11, s - 1))}
+            title="Decrease Font Size"
+            style={{ padding: '0.22rem 0.45rem', fontSize: '0.74rem' }}
+          >
+            <ZoomOut size={12} />
+          </button>
+
+          <button
+            className="btn-secondary"
+            onClick={() => setFontSize((s) => Math.min(18, s + 1))}
+            title="Increase Font Size"
+            style={{ padding: '0.22rem 0.45rem', fontSize: '0.74rem' }}
+          >
+            <ZoomIn size={12} />
+          </button>
+
+          <button
+            className="btn-secondary"
             onClick={handleCopy}
             title="Copy Source Code"
-            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+            style={{ padding: '0.22rem 0.55rem', fontSize: '0.74rem' }}
           >
-            {copied ? <Check size={13} color="var(--accent-emerald)" /> : <Copy size={13} />}
+            {copied ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
+
           <button
-            className="btn-action btn-ghost"
+            className="btn-secondary"
             onClick={onReset}
             title="Clear Editor"
-            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+            style={{ padding: '0.22rem 0.5rem', fontSize: '0.74rem' }}
           >
-            <Trash2 size={13} />
-            <span>Clear</span>
+            <Trash2 size={12} color="var(--accent-rose)" />
           </button>
         </div>
       </div>
 
       <div className="editor-wrapper">
-        <div className="line-numbers">
+        <div className="line-numbers" style={{ fontSize: `${fontSize}px` }}>
           {Array.from({ length: Math.max(lineCount, 15) }, (_, i) => (
             <div key={i + 1}>{i + 1}</div>
           ))}
@@ -93,6 +150,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           onChange={(e) => onChange(e.target.value)}
           spellCheck={false}
           placeholder="Paste or write code here to analyze..."
+          style={{
+            fontSize: `${fontSize}px`,
+            whiteSpace: wrapLines ? 'pre-wrap' : 'pre'
+          }}
         />
       </div>
     </div>
