@@ -7,6 +7,8 @@ import { DiffViewer } from './components/DiffViewer';
 import { ResearchPanel } from './components/ResearchPanel';
 import { AssistantChat } from './components/AssistantChat';
 import { SettingsModal } from './components/SettingsModal';
+import { QuickGuide } from './components/QuickGuide';
+import { Toast, ToastMessage } from './components/Toast';
 
 import { SCENARIOS } from './samples/scenarios';
 import { PERSONAS } from './engine/personas';
@@ -23,6 +25,8 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'review' | 'diff' | 'research' | 'chat'>('review');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isGuideOpen, setIsGuideOpen] = useState<boolean>(true);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const [providerConfig, setProviderConfig] = useState<ProviderConfig>({
     provider: 'local-engine',
@@ -35,6 +39,18 @@ export const App: React.FC = () => {
 
   const activePersona = PERSONAS[activePersonaId];
 
+  const addToast = (type: 'success' | 'error' | 'info', text: string) => {
+    const id = String(Date.now() + Math.random());
+    setToasts((prev) => [...prev, { id, type, text }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3200);
+  };
+
+  const handleDismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
   const handleRunAnalysis = (overrideCode?: string, overrideLang?: string, overridePersona?: PersonaId) => {
     setIsAnalyzing(true);
     const targetCode = overrideCode ?? code;
@@ -45,13 +61,14 @@ export const App: React.FC = () => {
       const nextReport = analyzeCode(targetCode, targetLang, targetPersona);
       setReport(nextReport);
       setIsAnalyzing(false);
-    }, 180);
+    }, 120);
   };
 
   const handleSelectScenario = (id: string) => {
     setSelectedScenarioId(id);
     if (id === 'custom') {
       setCode('');
+      addToast('info', 'Switched to Custom Code editor. Paste or type your code!');
       return;
     }
     const found = SCENARIOS.find((s) => s.id === id);
@@ -59,24 +76,30 @@ export const App: React.FC = () => {
       setCode(found.code);
       setLanguage(found.language);
       handleRunAnalysis(found.code, found.language, activePersonaId);
+      addToast('info', `Loaded preset: ${found.name}`);
     }
   };
 
   const handleSelectPersona = (pid: PersonaId) => {
     setActivePersonaId(pid);
     handleRunAnalysis(code, language, pid);
+    const p = PERSONAS[pid];
+    addToast('info', `Reviewer switched to ${p.name} (${p.role})`);
   };
 
-  const handleApplyFix = (fixSnippet: string) => {
-    const updated = code + '\n\n// Hardened Fix applied:\n' + fixSnippet;
+  const handleApplyFix = (_fixSnippet: string) => {
+    // Cleanly replace with the refactored code to eliminate all flaws
+    const updated = report.refactoredCode;
     setCode(updated);
     handleRunAnalysis(updated, language, activePersonaId);
+    addToast('success', 'Fix applied! Health score updated in editor.');
   };
 
   const handleApplyRefactor = (refactored: string) => {
     setCode(refactored);
     handleRunAnalysis(refactored, language, activePersonaId);
     setActiveTab('review');
+    addToast('success', 'Complete refactor applied! Code is now fully hardened.');
   };
 
   const handleExportReport = () => {
@@ -123,18 +146,19 @@ ${report.testSuiteSuggestion}
     a.download = `codelens-report-${Date.now()}.md`;
     a.click();
     URL.revokeObjectURL(url);
+    addToast('success', 'Audit report downloaded as Markdown (.md)');
   };
 
   const handleCopyPatch = async () => {
     await navigator.clipboard.writeText(report.unifiedDiff);
-    alert('Unified .patch copied to clipboard!');
+    addToast('success', 'Unified .patch copied to clipboard!');
   };
 
   // Re-run analysis on code change with debounce
   useEffect(() => {
     const handler = setTimeout(() => {
       handleRunAnalysis(code, language, activePersonaId);
-    }, 400);
+    }, 350);
     return () => clearTimeout(handler);
   }, [code, language]);
 
@@ -146,12 +170,18 @@ ${report.testSuiteSuggestion}
         onSelectScenario={handleSelectScenario}
         activePersona={activePersonaId}
         onSelectPersona={handleSelectPersona}
-        onRunAnalysis={() => handleRunAnalysis()}
+        onRunAnalysis={() => {
+          handleRunAnalysis();
+          addToast('info', 'Audit refreshed!');
+        }}
         onExportReport={handleExportReport}
         onCopyPatch={handleCopyPatch}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onToggleGuide={() => setIsGuideOpen(!isGuideOpen)}
         isAnalyzing={isAnalyzing}
       />
+
+      <QuickGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
 
       <MetricsBar
         scores={report.scores}
@@ -166,8 +196,14 @@ ${report.testSuiteSuggestion}
           code={code}
           onChange={setCode}
           language={language}
-          onLanguageChange={setLanguage}
-          onReset={() => setCode('')}
+          onLanguageChange={(l) => {
+            setLanguage(l);
+            addToast('info', `Language set to ${l.toUpperCase()}`);
+          }}
+          onReset={() => {
+            setCode('');
+            addToast('info', 'Editor cleared');
+          }}
         />
 
         <div className="intel-pane">
@@ -212,6 +248,7 @@ ${report.testSuiteSuggestion}
                 issues={report.issues}
                 summary={report.summary}
                 onApplyFix={handleApplyFix}
+                onViewDiffTab={() => setActiveTab('diff')}
               />
             )}
 
@@ -250,8 +287,13 @@ ${report.testSuiteSuggestion}
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         config={providerConfig}
-        onSave={setProviderConfig}
+        onSave={(cfg) => {
+          setProviderConfig(cfg);
+          addToast('success', 'Engine settings saved!');
+        }}
       />
+
+      <Toast toasts={toasts} onDismiss={handleDismissToast} />
     </div>
   );
 };
