@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
+import { Header, AppTheme } from './components/Header';
 import { CodeEditor } from './components/CodeEditor';
 import { ReviewPanel } from './components/ReviewPanel';
 import { DiffViewer } from './components/DiffViewer';
@@ -21,7 +21,10 @@ import {
   Sparkles,
   ShieldCheck,
   AlertTriangle,
-  AlertCircle
+  AlertCircle,
+  Columns,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -30,8 +33,11 @@ export const App: React.FC = () => {
   const [code, setCode] = useState<string>(SCENARIOS[0].code);
   const [language, setLanguage] = useState<string>(SCENARIOS[0].language);
 
-  // User flow state: Start on clean editor screen, transition to results only on click!
+  // User flow state & Theme / View customization
+  const [currentTheme, setCurrentTheme] = useState<AppTheme>('cosmic');
+  const [viewMode, setViewMode] = useState<'split' | 'editor' | 'review'>('split');
   const [hasAnalyzed, setHasAnalyzed] = useState<boolean>(false);
+  const [chatPrompt, setChatPrompt] = useState<string>('');
 
   const [activeTab, setActiveTab] = useState<'review' | 'diff' | 'research' | 'chat'>('review');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -120,6 +126,32 @@ export const App: React.FC = () => {
     addToast('success', 'Complete refactor applied to editor!');
   };
 
+  const handleAutoFixAll = () => {
+    setCode(report.refactoredCode);
+    const nextReport = analyzeCode(report.refactoredCode, language, activePersonaId);
+    setReport(nextReport);
+    addToast('success', 'All recommended fixes applied and verified!');
+  };
+
+  const handleTriggerToolAction = (action: string) => {
+    if (action === 'generate-tests') {
+      setActiveTab('research');
+      addToast('info', 'Generated regression & edge-case test harness');
+    } else if (action === 'security-fuzz') {
+      setActivePersonaId('security-auditor');
+      const nextReport = analyzeCode(code, language, 'security-auditor');
+      setReport(nextReport);
+      setActiveTab('review');
+      addToast('info', 'Security Fuzzing Lens Active');
+    } else if (action === 'zero-alloc') {
+      setActivePersonaId('staff-systems');
+      const nextReport = analyzeCode(code, language, 'staff-systems');
+      setReport(nextReport);
+      setActiveTab('diff');
+      addToast('info', 'Zero-Allocation Systems Lens Active');
+    }
+  };
+
   const handleExportReport = () => {
     const md = `# CodeLens Audit Report
 **Date:** ${new Date().toISOString()}  
@@ -183,8 +215,8 @@ ${report.testSuiteSuggestion}
   }, [code, language, hasAnalyzed, activePersonaId]);
 
   return (
-    <div className="app-container">
-      {/* 1. Minimal Header */}
+    <div className="app-container" data-theme={currentTheme}>
+      {/* 1. Header with Themes and Developer Tools */}
       <Header
         scenarios={SCENARIOS}
         selectedScenarioId={selectedScenarioId}
@@ -193,7 +225,12 @@ ${report.testSuiteSuggestion}
         onExportReport={handleExportReport}
         onCopyPatch={handleCopyPatch}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onTriggerToolAction={handleTriggerToolAction}
         isAnalyzing={isAnalyzing}
+        hasAnalyzed={hasAnalyzed}
+        onBackToEditor={() => setHasAnalyzed(false)}
+        currentTheme={currentTheme}
+        onSelectTheme={setCurrentTheme}
       />
 
       {/* 2. State-Based Workspace Flow */}
@@ -292,7 +329,7 @@ ${report.testSuiteSuggestion}
                 style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
               >
                 <ArrowLeft size={13} />
-                <span>Back to Full Editor</span>
+                <span>Full Editor</span>
               </button>
 
               <div
@@ -316,18 +353,61 @@ ${report.testSuiteSuggestion}
                     : 'Hardened & Clean'}
                 </span>
               </div>
+
+              {report.issues.length > 0 && (
+                <button
+                  className="btn-glow"
+                  onClick={handleAutoFixAll}
+                  style={{ padding: '0.24rem 0.75rem', fontSize: '0.74rem' }}
+                  title="Apply all recommended fixes to code"
+                >
+                  <Sparkles size={12} />
+                  <span>Auto-Fix All ({report.issues.length})</span>
+                </button>
+              )}
             </div>
 
             <div className="results-subnav-right">
-              <span>Time: <strong style={{ color: 'var(--text-primary)' }}>{report.complexity.timeComplexity}</strong></span>
-              <span>•</span>
-              <span>Space: <strong style={{ color: 'var(--text-primary)' }}>{report.complexity.spaceComplexity}</strong></span>
-              <span>•</span>
-              <span>{report.loc} lines</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginRight: '0.5rem' }}>
+                <span className="stat-pill" style={{ color: 'var(--accent-cyan)' }}>
+                  Time: <strong>{report.complexity.timeComplexity}</strong>
+                </span>
+                <span className="stat-pill" style={{ color: 'var(--accent-purple)' }}>
+                  Space: <strong>{report.complexity.spaceComplexity}</strong>
+                </span>
+                <span className="stat-pill" style={{ color: 'var(--text-muted)' }}>
+                  {report.loc} lines
+                </span>
+              </div>
+
+              {/* View Mode Toggle: Split / Code Focus / Review Focus */}
+              <div className="filter-pills">
+                <button
+                  className={`filter-pill ${viewMode === 'split' ? 'active' : ''}`}
+                  onClick={() => setViewMode('split')}
+                  title="50/50 Split View"
+                >
+                  <Columns size={12} />
+                </button>
+                <button
+                  className={`filter-pill ${viewMode === 'editor' ? 'active' : ''}`}
+                  onClick={() => setViewMode('editor')}
+                  title="Editor Focus"
+                >
+                  <Maximize2 size={12} />
+                </button>
+                <button
+                  className={`filter-pill ${viewMode === 'review' ? 'active' : ''}`}
+                  onClick={() => setViewMode('review')}
+                  title="Review Focus"
+                >
+                  <Minimize2 size={12} />
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="results-workspace-grid">
+          <div className={`results-workspace-grid mode-${viewMode}`}>
             <CodeEditor
               code={code}
               onChange={setCode}
@@ -338,6 +418,7 @@ ${report.testSuiteSuggestion}
                 setHasAnalyzed(false);
                 addToast('info', 'Editor cleared');
               }}
+              onToast={addToast}
             />
 
             <div className="intel-pane">
@@ -384,7 +465,12 @@ ${report.testSuiteSuggestion}
                     activeLens={activePersonaId}
                     onSelectLens={handleSelectPersona}
                     onApplyFix={handleApplyFix}
+                    onApplyAllFixes={handleAutoFixAll}
                     onViewDiffTab={() => setActiveTab('diff')}
+                    onAskAI={(prompt) => {
+                      setChatPrompt(prompt);
+                      setActiveTab('chat');
+                    }}
                   />
                 )}
 
@@ -413,6 +499,7 @@ ${report.testSuiteSuggestion}
                     complexity={report.complexity}
                     persona={activePersona}
                     providerConfig={providerConfig}
+                    initialPrompt={chatPrompt}
                   />
                 )}
               </div>
